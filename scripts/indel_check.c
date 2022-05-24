@@ -264,9 +264,9 @@ int main (int argc, char **argv)
   printf("chrom\tref_start\tref_end\talt\tsize\ttype\tmutCov\n");
   for (k = kh_begin(h); k != kh_end(h); ++k) { // traverse
     	if (!kh_exist(h,k)) continue;
-    	char *kk = kh_key(h, k);
+    	const char *kk = kh_key(h, k);
     	int vv = kh_val(h, k);
-    	printf("%s\t%d\n", kk, vv);
+    	if (vv >= min_cov) printf("%s\t%d\n", kk, vv);
     }
 
   // free memory
