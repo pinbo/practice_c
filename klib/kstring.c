@@ -204,6 +204,51 @@ char *kstrnstr(const char *str, const char *pat, int n, int **_prep)
 	return (char*)kmemmem(str, n, pat, strlen(pat), _prep);
 }
 
+// JZ add start
+
+void initArray(kvec *a, size_t initialSize) {
+  a->a = malloc(initialSize * sizeof(char*));
+  a->n = 0;
+  a->m = initialSize;
+}
+
+void insertArray(kvec *a, char* element) {
+  // a->n is the number of used entries, because a->array[a->n++] updates a->n only *after* the array has been accessed.
+  // Therefore a->n can go up to a->size 
+  if (a->n == a->m) {
+    a->m *= 2;
+    a->a = realloc(a->a, a->m * sizeof(char*));
+  }
+  a->a[a->n++] = element;
+}
+
+void freeArray(kvec *a) {
+  free(a->a);
+  a->a = NULL;
+  a->n = a->m = 0;
+}
+
+// split by a substring, not by char
+int splitsub(char *str, const char *delim, kvec *array)
+{
+    size_t dl = strlen(delim); // delim length
+    insertArray(array, str);
+    char *tmp;
+    char *p;
+    p = tmp = str;
+    while (p != NULL){
+        p = strstr(tmp, delim);
+        if (p == NULL) return 0;
+        *p = '\0';
+        tmp = p + dl;
+        printf("tmp is %s \n", tmp);
+        insertArray(array, tmp);
+    }
+    return 0;
+}
+
+// JZ add end
+
 /***********************
  * The main() function *
  ***********************/

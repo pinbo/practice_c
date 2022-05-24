@@ -274,4 +274,19 @@ static inline int *ksplit(kstring_t *s, int delimiter, int *n)
 	return offsets;
 }
 
+//JZ added
+
+// dynamic string arrays
+typedef struct {
+  char **a; // string vector
+  size_t n; // array length
+  size_t m; // capacity
+} kvec;
+
+void initArray(kvec *a, size_t initialSize);
+void insertArray(kvec *a, char* element);
+void freeArray(kvec *a);
+// split by a substring, not by char
+int splitsub(char *str, const char *delim, kvec *array);
+
 #endif
