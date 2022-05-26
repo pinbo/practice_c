@@ -9,7 +9,7 @@
 #include "../klib/kseq.h"
 
 // to compile
-// gcc -Wall -g -O2 indel_check.c ../klib/kstring.c  -o indel_check -lz
+// gcc -Wall -g -O2 snp_indel_check.c ../klib/kstring.c  -o snp_indel_check -lz
 
 
 typedef kvec_t(int) kvecn; // int or char vector
