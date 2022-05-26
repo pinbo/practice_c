@@ -245,8 +245,8 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
   char *read_seq= ks->s + ff[9];
   size_t read_len = strlen(read_seq);
   char *strand = flag & 0x10 ? "-" : "+";
-  printf("cigar is %s\n", cigar);
-  printf("read_seq is %s\n", read_seq);
+  // printf("cigar is %s\n", cigar);
+  // printf("read_seq is %s\n", read_seq);
   // let read_id = ff[0];
   if (strcmp(cigar, "*") == 0 ) { // no mapping
       return 0;
@@ -414,7 +414,7 @@ int main (int argc, char **argv)
 
   // read fasta
   if (fasta_file == NULL){
-    printf("Please provide a fasta file with template sequences (-f your_sequence.fa)\n");
+    fprintf(stderr, "Please provide a fasta file with template sequences (-f your_sequence.fa)\n");
     fprintf(stderr,
       "Usage: snp_indel_check [options] -f ref.fasta <aln.sam>\n"
       "or:    samtools view aln.bam | snp_indel_check [options] -f ref.fasta\n"
