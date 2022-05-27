@@ -100,15 +100,13 @@ cigar_info split_cigar (char *cigar) {
 int putsnps(char *s1, char *s2, khash_t(str) *h, char * chrom, int ref_pos)
 {
   size_t dl = strlen(s1); // delim length
-  int i;
+  int i, absent;
+  kstring_t kk = { 0, 0, NULL };
+  khint_t k;
   for (i=0; i<dl; i++){
     if (s1[i]!=s2[i]) {
-      // kv_push(int, *array);
-      kstring_t kk = { 0, 0, NULL };
       ksprintf(&kk, "%s\t%d\t%d\t%c\t%c\t0\tsnp", chrom, ref_pos+i+1, ref_pos+i+1, s1[i], s2[i]);
-      khint_t k;
-      int absent;
-      k = kh_put(str, h, kk.s, &absent);
+      k = kh_put(str, h, ks_release(&kk), &absent);
       if (!absent) {
         kh_value(h, k) += 1; // set the value
       } else {
@@ -133,7 +131,7 @@ int putindels(char *ref_seq, char *read_seq, khash_t(str) *h, char *chrom, int r
   }
   khint_t k;
   int absent;
-  k = kh_put(str, h, kk.s, &absent);
+  k = kh_put(str, h, ks_release(&kk), &absent);
   if (!absent) {
     kh_value(h, k) += 1; // set the value
   } else {
@@ -318,7 +316,7 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
         // printf("key is %s\n", kk.s);
         // khint_t k;
         int absent;
-        k = kh_put(str, h, kk.s, &absent);
+        k = kh_put(str, h, ks_release(&kk), &absent);
         if (!absent) {
           kh_value(h, k) += 1; // set the value
         } else {
@@ -358,7 +356,7 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
         ksprintf(&kk, "%s\t%d\t%d\t\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1,  mut_size);
         // khint_t k;
         int absent;
-        k = kh_put(str, h, kk.s, &absent);
+        k = kh_put(str, h, ks_release(&kk), &absent);
         if (!absent) {
           kh_value(h, k) += 1; // set the value
         } else {
