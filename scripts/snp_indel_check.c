@@ -369,12 +369,14 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
     // free sr
     kv_destroy(sr.vop);
     kv_destroy(sr.vlen);
+    free(ff2);
   }
 
   // destroy r
   kv_destroy(r.vop);
   kv_destroy(r.vlen);
-
+  // free fields
+  free(ff);
   return 0;
 }
 
@@ -449,9 +451,9 @@ int main (int argc, char **argv)
   printf("chrom\tref_start\tref_end\tref\talt\tsize\ttype\tmutCov\n");
   for (k = kh_begin(h); k != kh_end(h); ++k) { // traverse
     	if (!kh_exist(h,k)) continue;
-    	const char *kk = kh_key(h, k);
+    	// const char *kk = kh_key(h, k);
     	int vv = kh_val(h, k);
-    	if (vv >= min_cov) printf("%s\t%d\n", kk, vv);
+    	if (vv >= min_cov) printf("%s\t%d\n", kh_key(h, k), vv);
       free((char*)kh_key(h, k));
     }
 
