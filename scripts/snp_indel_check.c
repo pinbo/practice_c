@@ -12,8 +12,8 @@
 // gcc -Wall -g -O2 snp_indel_check.c ../klib/kstring.c  -o snp_indel_check -lz
 
 
-typedef kvec_t(int) kvecn; // int or char vector
-typedef kvec_t(char *) kvecs; // string vector
+// typedef kvec_t(int) kvecn; // int or char vector
+// typedef kvec_t(char *) kvecs; // string vector
 
 // string slice
 void slice(const char *str, char *result, size_t start, size_t end)
@@ -53,10 +53,10 @@ khash_t(fasta) * read_fasta(char *infile){
     // printf("seq: %s\n", seq->seq.s);
     // if (seq->qual.l) printf("qual: %s\n", seq->qual.s);
     k = kh_put(fasta, h, seq->name.s, &absent);
-    h->keys[k] = (char*) malloc (seq->name.l + 1);
-    h->vals[k] = (char*) malloc (seq->seq.l + 1);
-    strcpy(h->keys[k], seq->name.s);
-    strcpy(h->vals[k], seq->seq.s);
+    if (absent) {
+      kh_key(h, k) = strdup(seq->name.s); // strdup will malloc, so need to be freed
+      kh_val(h, k) = strdup(seq->seq.s);
+    }
 	}
 	// printf("return value: %d\n", l);
 	kseq_destroy(seq);
@@ -66,13 +66,13 @@ khash_t(fasta) * read_fasta(char *infile){
 
 
 // int exclamationCheck = strchr(str, '!') != NULL;
-struct cigar_info {
+typedef struct {
     kvec_t(char) vop; // M, S etc
     kvec_t(int) vlen; // length
-};
+} cigar_info;
 
-struct cigar_info split_cigar (char *cigar) {
-  struct cigar_info r;// = {vop, vlen };
+cigar_info split_cigar (char *cigar) {
+  cigar_info r;// = {vop, vlen };
   kv_init(r.vop);
   kv_init(r.vlen);
   char *numbers = "0123456789";
@@ -143,18 +143,16 @@ int putindels(char *ref_seq, char *read_seq, khash_t(str) *h, char *chrom, int r
 }
 
 // fn parse_cigar (cigar: &str, ref_pos: isize, same_strand: bool, read_len: isize)
-int * parse_cigar_snp(char *cigar, char *ref_seq, char *read_seq, khash_t(str) *h, char *chrom, int ref_pos, int debug){
-  struct cigar_info r = split_cigar(cigar);
+int * parse_snp(cigar_info *r, char *ref_seq, char *read_seq, khash_t(str) *h, char *chrom, int ref_pos, int debug){
+  // cigar_info r = split_cigar(cigar);
   int read_pos1 = 0; // left start
   int read_pos2 = 0; // right end
   int ref_pos1 = ref_pos; // left start
   int ref_pos2 = ref_pos; // right end
   int nmatch = 0; // number of M, if match showed up, then no more S or H
-  kvecn snplist;
-  kv_init(snplist);
-  for (int i =0; i < r.vop.n; i++) {
-    int num = r.vlen.a[i];
-    char op = r.vop.a[i];
+  for (int i =0; i < r->vop.n; i++) {
+    int num = r->vlen.a[i];
+    char op = r->vop.a[i];
     if (op == 'M' || op == '=' || op == 'X'){
       read_pos2 += num;
       ref_pos2 += num;
@@ -193,16 +191,16 @@ int * parse_cigar_snp(char *cigar, char *ref_seq, char *read_seq, khash_t(str) *
 }
 
 // fn parse_cigar (cigar: &str, ref_pos: isize, same_strand: bool, read_len: isize)
-int * parse_cigar(char *cigar, int ref_pos, int same_strand, size_t read_len){
-  struct cigar_info r = split_cigar(cigar);
+int * parse_cigar(cigar_info *r, int ref_pos, int same_strand, size_t read_len){
+  // struct cigar_info r = split_cigar(cigar);
   int read_pos1 = 0; // left start
   int read_pos2 = -1; // right end
   int ref_pos1 = ref_pos; // left start
   int ref_pos2 = ref_pos - 1; // right end
   int nmatch = 0; // number of M, if match showed up, then no more S or H
-  for (int i =0; i < r.vop.n; i++) {
-    int num = r.vlen.a[i];
-    char op = r.vop.a[i];
+  for (int i =0; i < r->vop.n; i++) {
+    int num = r->vlen.a[i];
+    char op = r->vop.a[i];
     if (op == 'M' || op == '=' || op == 'X'){
       read_pos2 += num;
       ref_pos2 += num;
@@ -225,15 +223,15 @@ int * parse_cigar(char *cigar, int ref_pos, int same_strand, size_t read_len){
     rr[0] = read_len - read_pos2 - 1; rr[1] = read_len - read_pos1 - 1; rr[2] = ref_pos1; rr[3] = ref_pos2;
   }
   // destroy
-  kv_destroy(r.vop);
-  kv_destroy(r.vlen);
+  // kv_destroy(r.vop);
+  // kv_destroy(r.vlen);
 
   return rr;
 }
 
 
 // fn parse_line (line: &str, map: &mut HashMap<String, isize>, no_small_indels: bool, debug: bool) 
-int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
+int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
   int *ff, n, i;
   // char *line = ks->s;
   ff = ksplit(ks, '\t', &n);
@@ -251,11 +249,12 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
   if (strcmp(cigar, "*") == 0 ) { // no mapping
       return 0;
   }
+  cigar_info r = split_cigar(cigar);
   // SNPs and small indels
   khint_t k;
-  k = kh_get(fasta, fa, chrom);
-  char *ref_seq = kh_val(fa, k);
-  parse_cigar_snp(cigar, ref_seq, read_seq, h, chrom, pos, debug);
+  k = kh_get(fasta, fh, chrom);
+  char *ref_seq = kh_val(fh, k);
+  parse_snp(&r, ref_seq, read_seq, h, chrom, pos, debug);
 
   // big deletions
   int has_sa = 0;
@@ -281,17 +280,18 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
     int sa_pos  = atoi(s.s + ff2[1]) - 1; // 0-based this is close to the border on the left, may need to adjust
     char *sa_strand = s.s + ff2[2];
     char *sa_cigar  = s.s + ff2[3];
+    cigar_info sr = split_cigar(sa_cigar);
     // free: should not free
     // free(s.s); free(ff2);free(ff);
     int all_pos1[4];
     int all_pos2 [4];
     if (strcmp(chrom,sa_chrom)==0 && strcmp(strand, sa_strand) ==0) { // potential big deletion, could be insertion too, but update later
       if (sa_pos > pos) { // SA is on the right
-        memcpy(all_pos1, parse_cigar(cigar, pos, 1, read_len), 4 * sizeof(int));
-        memcpy(all_pos2, parse_cigar(sa_cigar, sa_pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos1, parse_cigar(&r, pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos2, parse_cigar(&sr, sa_pos, 1, read_len), 4 * sizeof(int));
       } else {
-        memcpy(all_pos2, parse_cigar(cigar, pos, 1, read_len), 4 * sizeof(int));
-        memcpy(all_pos1, parse_cigar(sa_cigar, sa_pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos2, parse_cigar(&r, pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos1, parse_cigar(&sr, sa_pos, 1, read_len), 4 * sizeof(int));
       }
       if (debug){
         printf("potential big deletion\n%s\t%s\n", read_id, chrom);
@@ -327,11 +327,11 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
       }
     }else if (strcmp(chrom,sa_chrom)==0 && strcmp(strand, sa_strand) !=0) {// inversions
       if (sa_pos > pos) { // SA is on the right
-        memcpy(all_pos1, parse_cigar(cigar, pos, 1, read_len), 4 * sizeof(int));
-        memcpy(all_pos2, parse_cigar(sa_cigar, sa_pos, 0, read_len), 4 * sizeof(int));
+        memcpy(all_pos1, parse_cigar(&r, pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos2, parse_cigar(&sr, sa_pos, 0, read_len), 4 * sizeof(int));
       } else {
-        memcpy(all_pos2, parse_cigar(cigar, pos, 0, read_len), 4 * sizeof(int));
-        memcpy(all_pos1, parse_cigar(sa_cigar, sa_pos, 1, read_len), 4 * sizeof(int));
+        memcpy(all_pos2, parse_cigar(&r, pos, 0, read_len), 4 * sizeof(int));
+        memcpy(all_pos1, parse_cigar(&sr, sa_pos, 1, read_len), 4 * sizeof(int));
       }
       if (debug){
         printf("potential inversion\n%s\t%s\n", read_id, chrom);
@@ -366,7 +366,14 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fa){
         }
       }
     }
+    // free sr
+    kv_destroy(sr.vop);
+    kv_destroy(sr.vlen);
   }
+
+  // destroy r
+  kv_destroy(r.vop);
+  kv_destroy(r.vlen);
 
   return 0;
 }
@@ -424,7 +431,7 @@ int main (int argc, char **argv)
       "  -f fasta file name    your reference sequences\n");
     return 1;
   }
-  khash_t(fasta) *fa = read_fasta(fasta_file);
+  khash_t(fasta) *fh = read_fasta(fasta_file);
 
   kstring_t ks = { 0, 0, NULL };
   khash_t(str) *h; // hash for mutations
@@ -432,7 +439,7 @@ int main (int argc, char **argv)
   if (input) {
     for (ks.l = 0; kgetline(&ks, (kgets_func *)fgets, input) == 0; ks.l = 0){
       // printf("new line is %s\n",  ks.s);
-      parse_line(&ks, h, debug, fa);
+      parse_line(&ks, h, debug, fh);
     }
     fclose(input);
   }
@@ -445,9 +452,21 @@ int main (int argc, char **argv)
     	const char *kk = kh_key(h, k);
     	int vv = kh_val(h, k);
     	if (vv >= min_cov) printf("%s\t%d\n", kk, vv);
+      free((char*)kh_key(h, k));
     }
 
   // free memory
+  // for (k = 0; k < kh_end(h); ++k)
+  //   if (kh_exist(h, k))
+  //     free((char*)kh_key(h, k));
   kh_destroy(str, h);
+  
+  // free fasta hash
+  for (k = 0; k < kh_end(fh); ++k)
+    if (kh_exist(fh, k)){
+      free((char*)kh_key(fh, k));
+      free((char*)kh_val(fh, k));
+    }
+  kh_destroy(fasta, fh);
   return 0;
 }
