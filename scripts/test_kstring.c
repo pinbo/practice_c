@@ -96,6 +96,14 @@ int kgetline(kstring_t *s, kgets_func *fgets_fn, void *fp)
 	return 0;
 }
 
+
+char* test_sprintf(){
+    kstring_t s = { 0, 0, NULL };
+	ksprintf(&s, " aaaa\tdddd:    %d ", 100);
+    char *new = ks_release(&s);
+    return new;
+}
+
 int main(int argc, char **argv)
 {
 	// kstring_t *s;
@@ -108,6 +116,10 @@ int main(int argc, char **argv)
     char *p = "opq";
     kputs(p, &s);
     printf("'%s'\n", s.s);
+    free(s.s);
+    char *new = test_sprintf();
+    printf("new is '%s'\n", new);
+    free(new);
 
 	// // test ksplit()
 	// // fields = ksplit(s, 0, &n);
@@ -127,6 +139,7 @@ int main(int argc, char **argv)
                 fields = ksplit(&ks, '\t', &n);
                 char *chrom = ks.s + fields[2];
                 printf("field[2] = '%s'\n",  chrom);
+                free(fields);
             }
             fclose(f);
         }
