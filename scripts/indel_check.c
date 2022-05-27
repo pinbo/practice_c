@@ -207,8 +207,9 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug){
         }
       }
     }
+    free(s.s); free(ff2);
   }
-
+  free(ff);
   return 0;
 }
 
@@ -267,6 +268,7 @@ int main (int argc, char **argv)
     	const char *kk = kh_key(h, k);
     	int vv = kh_val(h, k);
     	if (vv >= min_cov) printf("%s\t%d\n", kk, vv);
+        free((char*)kh_key(h, k));
     }
 
   // free memory
