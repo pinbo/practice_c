@@ -229,7 +229,7 @@ int * parse_cigar(cigar_info *r, int ref_pos, int same_strand, size_t read_len){
 
 
 // fn parse_line (line: &str, map: &mut HashMap<String, isize>, no_small_indels: bool, debug: bool) 
-int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
+int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, int no_snp_call){
   int *ff, n, i;
   // char *line = ks->s;
   ff = ksplit(ks, '\t', &n);
@@ -250,9 +250,11 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
   cigar_info r = split_cigar(cigar);
   // SNPs and small indels
   khint_t k;
-  k = kh_get(fasta, fh, chrom);
-  char *ref_seq = kh_val(fh, k);
-  parse_snp(&r, ref_seq, read_seq, h, chrom, pos, debug);
+  if (!no_snp_call){
+    k = kh_get(fasta, fh, chrom);
+    char *ref_seq = kh_val(fh, k);
+    parse_snp(&r, ref_seq, read_seq, h, chrom, pos, debug);
+  }
 
   // big deletions
   int has_sa = 0;
@@ -367,6 +369,7 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh){
     // free sr
     kv_destroy(sr.vop);
     kv_destroy(sr.vlen);
+    free(s.s);
     free(ff2);
   }
 
@@ -383,17 +386,21 @@ int main (int argc, char **argv)
 {
   int min_cov = 1;
   int debug = 0;
+  int no_snp_call = 0;
   // int call_snp = 0; // whether to call snp and small indels
   int c;
   char *fasta_file = NULL;
 
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "dc:f:")) != -1)
+  while ((c = getopt (argc, argv, "dnc:f:")) != -1)
     switch (c)
       {
       case 'd':
         debug = 1;
+        break;
+    case 'n':
+        no_snp_call = 1;
         break;
       case 'c':
         min_cov = atoi(optarg);
@@ -420,18 +427,22 @@ int main (int argc, char **argv)
   else input = stdin;
 
   // read fasta
-  if (fasta_file == NULL){
-    fprintf(stderr, "Please provide a fasta file with template sequences (-f your_sequence.fa)\n");
-    fprintf(stderr,
-      "Usage: snp_indel_check [options] -f ref.fasta <aln.sam>\n"
-      "or:    samtools view aln.bam | snp_indel_check [options] -f ref.fasta\n"
-      "Options:\n"
-      "  -d debug              print extra information for debugging \n"
-      "  -c coverage [int]     minimum coverage for a variant (defualt 1)\n"
-      "  -f fasta file name    your reference sequences\n");
-    return 1;
+  khash_t(fasta) *fh;
+  if (!no_snp_call) {
+    if (fasta_file == NULL){
+        fprintf(stderr, "Please provide a fasta file with template sequences (-f your_sequence.fa)\n");
+        fprintf(stderr,
+        "Usage: snp_indel_check [options] -f ref.fasta <aln.sam>\n"
+        "or:    samtools view aln.bam | snp_indel_check [options] -f ref.fasta\n"
+        "Options:\n"
+        "  -n                    no call for snps and small indels  \n"
+        "  -d debug              print extra information for debugging \n"
+        "  -c coverage [int]     minimum coverage for a variant (defualt 1)\n"
+        "  -f fasta file name    your reference sequences\n");
+        return 1;
+    }
+    fh = read_fasta(fasta_file);
   }
-  khash_t(fasta) *fh = read_fasta(fasta_file);
 
   kstring_t ks = { 0, 0, NULL };
   khash_t(str) *h; // hash for mutations
@@ -439,7 +450,7 @@ int main (int argc, char **argv)
   if (input) {
     for (ks.l = 0; kgetline(&ks, (kgets_func *)fgets, input) == 0; ks.l = 0){
       // printf("new line is %s\n",  ks.s);
-      parse_line(&ks, h, debug, fh);
+      parse_line(&ks, h, debug, fh, no_snp_call);
     }
     fclose(input);
   }
@@ -462,11 +473,13 @@ int main (int argc, char **argv)
   kh_destroy(str, h);
   
   // free fasta hash
-  for (k = 0; k < kh_end(fh); ++k)
-    if (kh_exist(fh, k)){
-      free((char*)kh_key(fh, k));
-      free((char*)kh_val(fh, k));
-    }
-  kh_destroy(fasta, fh);
+  if (!no_snp_call){
+    for (k = 0; k < kh_end(fh); ++k)
+        if (kh_exist(fh, k)){
+        free((char*)kh_key(fh, k));
+        free((char*)kh_val(fh, k));
+        }
+    kh_destroy(fasta, fh);
+  }
   return 0;
 }
