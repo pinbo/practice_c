@@ -104,6 +104,46 @@ char* test_sprintf(){
     return new;
 }
 
+int parse_line(kstring_t *ks){
+    int *ff, n;
+    ff = ksplit(ks, '\t', &n);
+    char *read_id = ks->s + ff[0];
+    int flag = atoi(ks->s + ff[1]);
+    char *chrom = ks->s + ff[2];
+    int pos  = atoi(ks->s + ff[3]) - 1; // 0 based
+    char *cigar  = ks->s + ff[5];
+    printf("read_id, flag, chrom, pos, cigar are %s, %d, %s, %d, %s\n",  read_id, flag, chrom, pos, cigar);
+    // big deletions
+    char *sa_info = NULL;
+    for (int i = 11; i < n; ++i){
+        if (strstr(ks->s + ff[i], "SA:Z") != NULL) {
+        sa_info = ks->s + ff[i];
+        break;
+        }
+    }
+    free(ff);
+    if (sa_info != NULL){
+        char *token = strtok(sa_info, ":"); // first string
+        token = strtok(NULL, ":"); // 2nd string
+        token = strtok(NULL, ":"); // 3rd string
+        // printf("token is %s\n", token);
+        kstring_t s = { 0, 0, NULL };
+        kputs(token, &s); // string to Kstring
+        printf("s is %s\n", s.s);
+        int *ff2 = ksplit(&s, ',', &n);
+        char *sa_chrom  = s.s + ff2[0];
+        int sa_pos  = atoi(s.s + ff2[1]) - 1; // 0-based this is close to the border on the left, may need to adjust
+        char *sa_strand = s.s + ff2[2];
+        char *sa_cigar  = s.s + ff2[3];
+        free(ff2);
+    // free: should not free
+    // free(s.s); free(ff2);
+        free(s.s);
+    }
+
+    return 0;
+}
+
 int main(int argc, char **argv)
 {
 	// kstring_t *s;
@@ -130,16 +170,18 @@ int main(int argc, char **argv)
 	// free(s->s); free(s); free(fields);
     //
     kstring_t ks = { 0, 0, NULL };
-    int *fields, n;
+    // int *fields, n;
     if (argc > 1) {
         FILE *f = fopen(argv[1], "r");
         if (f) {
             for (ks.l = 0; kgetline(&ks, (kgets_func *)fgets, f) == 0; ks.l = 0){
                 // printf("new line is %s\n",  ks.s);
-                fields = ksplit(&ks, '\t', &n);
-                char *chrom = ks.s + fields[2];
-                printf("field[2] = '%s'\n",  chrom);
-                free(fields);
+                // int *fields, n;
+                // fields = ksplit(&ks, '\t', &n);
+                // char *chrom = ks.s + fields[2];
+                // printf("field[2] = '%s'\n",  chrom);
+                // free(fields);
+                parse_line(&ks);
             }
             fclose(f);
         }

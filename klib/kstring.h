@@ -275,7 +275,13 @@ static inline int *ksplit(kstring_t *s, int delimiter, int *n)
 }
 
 //JZ added
-
+// input is a string
+static inline int *ksplit2(char *s, int delimiter, int *n)
+{
+	int max = 0, *offsets = 0;
+	*n = ksplit_core(s, delimiter, &max, &offsets);
+	return offsets;
+}
 // dynamic string arrays
 typedef struct {
   char **a; // string vector

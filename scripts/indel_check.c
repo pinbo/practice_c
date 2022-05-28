@@ -2,6 +2,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdarg.h>
 #include "../klib/kstring.h"
 #include "../klib/khash.h"
 #include "../klib/kvec.h"
@@ -9,6 +10,29 @@
 // to compile
 // gcc -Wall -g -O2 indel_check.c ../klib/kstring.c  -o indel_check
 // int exclamationCheck = strchr(str, '!') != NULL;
+
+//https://stackoverflow.com/questions/3774417/sprintf-with-automatic-memory-allocation
+char* mysprintf(const char *fmt, ...)
+{
+	va_list ap, ap1;
+	int len, res;
+	char  *buffer;
+	va_start(ap, fmt);
+	va_copy(ap1, ap);
+    len = vsnprintf(NULL, 0, fmt, ap);
+    if (len < 0) return NULL;
+    printf("needed is %d\n", len);
+	va_end(ap);
+    buffer = malloc(len+1);
+    if (!buffer)  return NULL;
+    res = vsnprintf(buffer, len+1, fmt, ap1);
+    if (res < 0){
+        free(buffer);
+        return NULL;
+    }
+    return buffer;
+}
+
 struct cigar_info {
     kvec_t(char) vop; // M, S etc
     kvec_t(int) vlen; // length
@@ -98,34 +122,41 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug){
   char *read_seq= ks->s + ff[9];
   size_t read_len = strlen(read_seq);
   char *strand = flag & 0x10 ? "-" : "+";
+//   printf("read_id, flag, chrom, pos, cigar are %s, %d, %s, %d, %s\n",  read_id, flag, chrom, pos, cigar);
   // let read_id = ff[0];
   if (strcmp(cigar, "*") == 0 ) { // no mapping
       return 0;
   }
-  int has_sa = 0;
+//   int has_sa = 0;
+  char *sa_info = NULL;
   for (i = 11; i < n; ++i){
     if (strstr(ks->s + ff[i], "SA:Z") != NULL) {
-      has_sa = 1;
+    //   has_sa = 1;
+      sa_info = ks->s + ff[i];
       break;
     }
   }
-  if (has_sa && strstr(cigar, "H") == NULL){
-    char *sa_info = ks->s + ff[i];
+  free(ff);
+
+  if (sa_info != NULL && strstr(cigar, "H") == NULL){
+    // char *sa_info = ks->s + ff[i];
     char *token = strtok(sa_info, ":"); // first string
     token = strtok(NULL, ":"); // 2nd string
     token = strtok(NULL, ":"); // 3rd string
     // printf("token is %s\n", token);
-    kstring_t s = { 0, 0, NULL };
-    kputs(token, &s); // string to Kstring
-    int *ff2 = ksplit(&s, ',', &n);
-    char *sa_chrom  = s.s + ff2[0];
-    int sa_pos  = atoi(s.s + ff2[1]) - 1; // 0-based this is close to the border on the left, may need to adjust
-    char *sa_strand = s.s + ff2[2];
-    char *sa_cigar  = s.s + ff2[3];
+    // kstring_t s = { 0, 0, NULL };
+    // kputs(token, &s); // string to Kstring
+    // int *ff2 = ksplit(&s, ',', &n);
+    int *ff2 = ksplit2(token, ',', &n);
+    char *sa_chrom  = token + ff2[0];
+    int sa_pos  = atoi(token + ff2[1]) - 1; // 0-based this is close to the border on the left, may need to adjust
+    char *sa_strand = token + ff2[2];
+    char *sa_cigar  = token + ff2[3];
     // free: should not free
     // free(s.s); free(ff2);free(ff);
     int all_pos1[4];
     int all_pos2 [4];
+    free(ff2);
     if (strcmp(chrom,sa_chrom)==0 && strcmp(strand, sa_strand) ==0) { // potential big deletion, could be insertion too, but update later
       if (sa_pos > pos) { // SA is on the right
         memcpy(all_pos1, parse_cigar(cigar, pos, 1, read_len), 4 * sizeof(int));
@@ -154,12 +185,13 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug){
         slice(read_seq, alt_seq, read_pos1, read_pos2+shift+1);
         // printf("alt_seq is %s\n", alt_seq);
         int mut_size = del_end_pos - ref_pos1 - 1;
-        kstring_t kk = { 0, 0, NULL };
-        ksprintf(&kk, "%s\t%d\t%d\t%s\t%d\tbig_indel", chrom, ref_pos1+1, del_end_pos+1, alt_seq, mut_size);
+        // kstring_t kk = { 0, 0, NULL };
+        // ksprintf(&kk, "%s\t%d\t%d\t%s\t%d\tbig_indel", chrom, ref_pos1+1, del_end_pos+1, alt_seq, mut_size);
+        char * tt = mysprintf("%s\t%d\t%d\t%s\t%d\tbig_indel", chrom, ref_pos1+1, del_end_pos+1, alt_seq, mut_size);
         // printf("key is %s\n", kk.s);
         khint_t k;
         int absent;
-        k = kh_put(str, h, kk.s, &absent);
+        k = kh_put(str, h, tt, &absent);
         if (!absent) {
           kh_value(h, k) += 1; // set the value
         } else {
@@ -195,11 +227,12 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug){
       }
       if (ref_pos1 <= del_end_pos) {
         int mut_size = del_end_pos - ref_pos1 - 1;
-        kstring_t kk = { 0, 0, NULL };
-        ksprintf(&kk, "%s\t%d\t%d\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1,  mut_size);
+        // kstring_t kk = { 0, 0, NULL };
+        // ksprintf(&kk, "%s\t%d\t%d\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1,  mut_size);
+        char *tt = mysprintf("%s\t%d\t%d\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1,  mut_size);
         khint_t k;
         int absent;
-        k = kh_put(str, h, kk.s, &absent);
+        k = kh_put(str, h, tt, &absent);
         if (!absent) {
           kh_value(h, k) += 1; // set the value
         } else {
@@ -207,9 +240,10 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug){
         }
       }
     }
-    free(s.s); free(ff2);
+    // free(s.s); free(ff2);
+    // free(ff2);
   }
-  free(ff);
+//   free(ff);
   return 0;
 }
 
