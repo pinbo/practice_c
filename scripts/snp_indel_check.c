@@ -101,7 +101,7 @@ int putsnps(char *s1, char *s2, khash_t(str) *h, char * chrom, int ref_pos)
 {
   size_t dl = strlen(s1); // delim length
   int i, absent;
-//   kstring_t kk = { 0, 0, NULL };
+//   kstring_t kk = { 0, 0, NULL }; // should move inside the loop
   khint_t k;
   for (i=0; i<dl; i++){
     if (s1[i]!=s2[i]) {
@@ -272,7 +272,6 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, in
     }
   }
   free(ff);
-  // SNPs or small indels
 
   // big deletions or inversions
   if (sa_info != NULL && strstr(cigar, "H") == NULL){
@@ -283,15 +282,13 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, in
     // printf("token is %s\n", token);
     kstring_t s = { 0, 0, NULL };
     kputs(token, &s); // string to Kstring
+    // fprintf(stderr, "s is %s\n", s.s);
     int *ff2 = ksplit(&s, ',', &n);
     char *sa_chrom  = s.s + ff2[0];
     int sa_pos  = atoi(s.s + ff2[1]) - 1; // 0-based this is close to the border on the left, may need to adjust
     char *sa_strand = s.s + ff2[2];
     char *sa_cigar  = s.s + ff2[3];
-    // cigar_info sr = split_cigar(sa_cigar);
     free(ff2);
-    // free: should not free
-    // free(s.s); free(ff2);free(ff);
     int all_pos1[4];
     int all_pos2 [4];
     if (strcmp(chrom,sa_chrom)==0 && strcmp(strand, sa_strand) ==0) { // potential big deletion, could be insertion too, but update later
@@ -307,7 +304,7 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, in
         printf("all_pos1: [%d, %d, %d, %d]\n", all_pos1[0], all_pos1[1], all_pos1[2], all_pos1[3]);
         printf("all_pos2: [%d, %d, %d, %d]\n", all_pos2[0], all_pos2[1], all_pos2[2], all_pos2[3]);
       }
-      if (all_pos1[0] > all_pos2[1] || all_pos1[3] >= all_pos2[2] || all_pos1[1] >= all_pos2[1]) {return 0;}
+      if (all_pos1[0] > all_pos2[1] || all_pos1[3] >= all_pos2[2] || all_pos1[1] >= all_pos2[1]) {free(s.s); return 0;}
       int read_pos1 = all_pos1[1];
       int ref_pos1  = all_pos1[3];
       int read_pos2 = all_pos2[0];
@@ -316,6 +313,7 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, in
       int del_end_pos = ref_pos2 + shift;
       if (ref_pos1 < del_end_pos) {
         if (read_pos2+shift+1 > read_len) {
+            free(s.s);
             return 0;
         }
         char alt_seq[read_pos2+shift+1-read_pos1];
@@ -377,16 +375,10 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, in
         }
       }
     }
-    // free sr
-    // kv_destroy(sr.vop);
-    // kv_destroy(sr.vlen);
+    // free strings
     free(s.s);
   }
 
-  // destroy r
-  // kv_destroy(r.vop);
-  // kv_destroy(r.vlen);
-  // free fields
   return 0;
 }
 
@@ -396,7 +388,6 @@ int main (int argc, char **argv)
   int min_cov = 1;
   int debug = 0;
   int no_snp_call = 0;
-  // int call_snp = 0; // whether to call snp and small indels
   int c;
   char *fasta_file = NULL;
 
