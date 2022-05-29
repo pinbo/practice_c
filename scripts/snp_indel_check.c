@@ -101,11 +101,13 @@ int putsnps(char *s1, char *s2, khash_t(str) *h, char * chrom, int ref_pos)
 {
   size_t dl = strlen(s1); // delim length
   int i, absent;
-  kstring_t kk = { 0, 0, NULL };
+//   kstring_t kk = { 0, 0, NULL };
   khint_t k;
   for (i=0; i<dl; i++){
     if (s1[i]!=s2[i]) {
+      kstring_t kk = { 0, 0, NULL };
       ksprintf(&kk, "%s\t%d\t%d\t%c\t%c\t0\tsnp", chrom, ref_pos+i+1, ref_pos+i+1, s1[i], s2[i]);
+    //   printf("kk.s in putsnps is %s\n", kk.s);
       k = kh_put(str, h, kk.s, &absent);
       if (!absent) {
         kh_value(h, k) += 1; // set the value
@@ -130,6 +132,7 @@ int putindels(char *ref_seq, char *read_seq, khash_t(str) *h, char *chrom, int r
     slice(ref_seq, alt_seq, ref_pos, ref_pos-indel_size+1);
     ksprintf(&kk, "%s\t%d\t%d\t%s\t%c\t%d\tdel", chrom, ref_pos+1, ref_pos-indel_size+1, alt_seq, ref_seq[ref_pos], indel_size);
   }
+//   printf("kk.s in putindels is %s\n", kk.s);
   khint_t k;
   int absent;
   k = kh_put(str, h, kk.s, &absent);
