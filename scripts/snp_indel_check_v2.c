@@ -218,11 +218,11 @@ int * parse_snp(char *cigar, char *ref_seq, char *read_seq, khash_t(str) *h, cha
       slice(ref_seq, ref_slice, ref_pos1, ref_pos2);
       slice(read_seq, read_slice, read_pos1, read_pos2);
       if (debug){
-        printf("ref_seq  is %s\n", ref_seq);
-        printf("ref_pos1, ref_pos2 are %d and %d\n", ref_pos1, ref_pos2);
-        printf("read_pos1, read_pos2 are %d and %d\n", read_pos1, read_pos2);
-        printf("ref_slice  is %s\n", ref_slice);
-        printf("read_slice is %s\n", read_slice);
+        fprintf(stderr, "ref_seq  is %s\n", ref_seq);
+        fprintf(stderr, "ref_pos1, ref_pos2 are %d and %d\n", ref_pos1, ref_pos2);
+        fprintf(stderr, "read_pos1, read_pos2 are %d and %d\n", read_pos1, read_pos2);
+        fprintf(stderr, "ref_slice  is %s\n", ref_slice);
+        fprintf(stderr, "read_slice is %s\n", read_slice);
       }
       putsnps(ref_slice, read_slice, h, chrom, ref_pos1);
       read_pos1 = read_pos2; // for next match
@@ -360,9 +360,9 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, kh
         memcpy(all_pos1, parse_cigar(sa_cigar, sa_pos, 1, read_len), 4 * sizeof(int));
       }
       if (debug){
-        printf("potential big deletion\n%s\t%s\n", read_id, chrom);
-        printf("all_pos1: [%d, %d, %d, %d]\n", all_pos1[0], all_pos1[1], all_pos1[2], all_pos1[3]);
-        printf("all_pos2: [%d, %d, %d, %d]\n", all_pos2[0], all_pos2[1], all_pos2[2], all_pos2[3]);
+        fprintf(stderr, "potential big deletion\n%s\t%s\n", read_id, chrom);
+        fprintf(stderr, "all_pos1: [%d, %d, %d, %d]\n", all_pos1[0], all_pos1[1], all_pos1[2], all_pos1[3]);
+        fprintf(stderr, "all_pos2: [%d, %d, %d, %d]\n", all_pos2[0], all_pos2[1], all_pos2[2], all_pos2[3]);
       }
       if (all_pos1[0] > all_pos2[1] || all_pos1[3] >= all_pos2[2] || all_pos1[1] >= all_pos2[1]) {free(s.s); return 0;}
       int read_pos1 = all_pos1[1];
@@ -407,9 +407,9 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, kh
         memcpy(all_pos1, parse_cigar(sa_cigar, sa_pos, 1, read_len), 4 * sizeof(int));
       }
       if (debug){
-        printf("potential inversion\n%s\t%s\n", read_id, chrom);
-        printf("all_pos1: [%d, %d, %d, %d]\n", all_pos1[0], all_pos1[1], all_pos1[2], all_pos1[3]);
-        printf("all_pos2: [%d, %d, %d, %d]\n", all_pos2[0], all_pos2[1], all_pos2[2], all_pos2[3]);
+        fprintf(stderr, "potential inversion\n%s\t%s\n", read_id, chrom);
+        fprintf(stderr, "all_pos1: [%d, %d, %d, %d]\n", all_pos1[0], all_pos1[1], all_pos1[2], all_pos1[3]);
+        fprintf(stderr, "all_pos2: [%d, %d, %d, %d]\n", all_pos2[0], all_pos2[1], all_pos2[2], all_pos2[3]);
       }
       int read_pos1 = all_pos1[1];
       int read_pos2 = all_pos2[0];
@@ -460,10 +460,11 @@ int main (int argc, char **argv)
   int no_snp_call = 0;
   int c;
   char *fasta_file = NULL;
+  char *outfile = NULL;
 
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "dnc:f:")) != -1)
+  while ((c = getopt (argc, argv, "dnc:f:o:")) != -1)
     switch (c)
       {
       case 'd':
@@ -478,8 +479,11 @@ int main (int argc, char **argv)
     case 'f':
         fasta_file = optarg;
         break;
+    case 'o':
+        outfile = optarg;
+        break;
       case '?':
-        if (optopt == 'c' || optopt == 'f')
+        if (optopt == 'c' || optopt == 'f' || optopt == 'o')
           fprintf (stderr, "Option -%c requires an argument.\n", optopt);
         else if (isprint (optopt))
           fprintf (stderr, "Unknown option `-%c'.\n", optopt);
@@ -492,9 +496,11 @@ int main (int argc, char **argv)
 
   fprintf (stderr, "debug = %d, min_cov = %d\n", debug, min_cov);
 
-  FILE *input;
+  FILE *input, *output;
   if (optind < argc) input = fopen(argv[optind], "r");
   else input = stdin;
+  if (outfile != NULL) output = fopen(outfile, "w");
+  else output = stdout;
 
   // read fasta
   khash_t(fasta) *fh = NULL;
@@ -508,7 +514,8 @@ int main (int argc, char **argv)
         "  -n                    no call for snps and small indels  \n"
         "  -d debug              print extra information for debugging \n"
         "  -c coverage [int]     minimum coverage for a variant (defualt 1)\n"
-        "  -f fasta file name    your reference sequences\n");
+        "  -f fasta file name    your reference sequences\n"
+        "  -o output file name   output file name (default:\n");
         return 1;
     }
     fh = read_fasta(fasta_file);
@@ -545,13 +552,13 @@ int main (int argc, char **argv)
 	free(ks.s);
   //print output
   int n;
-  printf("chrom\tref_start\tref_end\tref\talt\tsize\ttype\tmutCov\ttotalCov\tmutPercent\n");
+  fprintf(output, "chrom\tref_start\tref_end\tref\talt\tsize\ttype\tmutCov\ttotalCov\tmutPercent\n");
   for (k = kh_begin(h); k != kh_end(h); ++k) { // traverse
     	if (!kh_exist(h,k)) continue;
     	char *kk = (char *) kh_key(h, k);
     	int vv = kh_val(h, k);
     	if (vv >= min_cov) {
-        printf("%s\t%d", kk, vv);
+        fprintf(output, "%s\t%d", kk, vv);
         if (fh != NULL){
           int *tmp2 = ksplit2(kk, '\t', &n); // need to free
           char *chrom = kk+tmp2[0];
@@ -563,14 +570,16 @@ int main (int argc, char **argv)
           int d2 = tmparray[ref_end];
           int d3 = max(d1, d2); // max depth on reference
           float pct = 100.0 * vv / d3;
-          printf("\t%d\t%.1f", d3, pct);
+          fprintf(output, "\t%d\t%.1f", d3, pct);
           free(tmp2);
         }
-        printf("\n");
+        fprintf(output, "\n");
       }
       // free((char*)kh_key(h, k));
       free(kk);
-    }
+  }
+  fclose(output);
+
 
   // free memory
   kh_destroy(str, h);
