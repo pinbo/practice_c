@@ -75,6 +75,9 @@ khash_t(fasta) * read_fasta(char *infile){
     // if (seq->comment.l) printf("comment: %s\n", seq->comment.s);
     // printf("seq: %s\n", seq->seq.s);
     // if (seq->qual.l) printf("qual: %s\n", seq->qual.s);
+    for (int i = 0; i < seq->seq.l; ++i) {
+      seq->seq.s[i] = toupper(seq->seq.s[i]);
+    }
     k = kh_put(fasta, h, seq->name.s, &absent);
     if (absent) {
       kh_key(h, k) = strdup(seq->name.s); // strdup will malloc, so need to be freed
@@ -157,7 +160,7 @@ int putsnps(char *s1, char *s2, khash_t(str) *h, char * chrom, int ref_pos)
     if (s1[i]!=s2[i]) {
       kstring_t kk = { 0, 0, NULL };
       ksprintf(&kk, "%s\t%d\t%d\t%c\t%c\t0\tsnp", chrom, ref_pos+i+1, ref_pos+i+1, s1[i], s2[i]);
-    //   printf("kk.s in putsnps is %s\n", kk.s);
+      // fprintf(stderr, "kk.s in putsnps is %s\n", kk.s);
       k = kh_put(str, h, kk.s, &absent);
       if (!absent) {
         kh_value(h, k) += 1; // set the value
@@ -224,7 +227,7 @@ int * parse_snp(char *cigar, char *ref_seq, char *read_seq, khash_t(str) *h, cha
       putsnps(ref_slice, read_slice, h, chrom, ref_pos1);
       read_pos1 = read_pos2; // for next match
       ref_pos1 = ref_pos2;
-    } else if (op == 'S' || op == 'H') {
+    } else if (op == 'S'){ //|| op == 'H') {
       if (nmatch == 0) {
         read_pos1 += num;
         read_pos2 += num;
@@ -298,28 +301,26 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, kh
   char *read_seq= ks->s + ff[9];
   size_t read_len = strlen(read_seq);
   char *strand = flag & 0x10 ? "-" : "+";
-  // printf("cigar is %s\n", cigar);
-  // printf("read_seq is %s\n", read_seq);
-  // let read_id = ff[0];
   if (strcmp(cigar, "*") == 0 ) { // no mapping
-      return 0;
+    free(ff);
+    return 0;
   }
   // cigar_info r = split_cigar(cigar);
   // SNPs and small indels
   khint_t k;
-  if (!no_snp_call){
+  char *ref_seq = NULL;
+  if (fh != NULL) {
     k = kh_get(fasta, fh, chrom);
-    char *ref_seq = kh_val(fh, k);
-    parse_snp(cigar, ref_seq, read_seq, h, chrom, pos, debug);
-  }
-  // get depth
-  if (fh != NULL){// if fasta file provided
+    ref_seq = kh_val(fh, k);
+    // get depth
     k = kh_get(dep, dh, chrom);
     int *dep_array = kh_val(dh, k);
-    // for (i = 0; i<20; i++){
-    //   printf("dep_array[%d] is %d\n", i, dep_array[i]);
-    // }
     get_depth(cigar, dep_array, pos);
+  }
+  if (!no_snp_call){
+    // k = kh_get(fasta, fh, chrom);
+    // char *ref_seq = kh_val(fh, k);
+    parse_snp(cigar, ref_seq, read_seq, h, chrom, pos, debug);
   }
 
   // big deletions
@@ -379,8 +380,13 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, kh
         slice(read_seq, alt_seq, read_pos1, read_pos2+shift+1);
         // printf("alt_seq is %s\n", alt_seq);
         int mut_size = del_end_pos - ref_pos1 - 1;
+        char ref_slice[mut_size+3];
+        ref_slice[0] = 0;
+        if (fh != NULL){
+          slice(ref_seq, ref_slice, ref_pos1, del_end_pos+1);
+        }
         kstring_t kk = { 0, 0, NULL };
-        ksprintf(&kk, "%s\t%d\t%d\t\t%s\t%d\tbig_indel", chrom, ref_pos1+1, del_end_pos+1, alt_seq, mut_size);
+        ksprintf(&kk, "%s\t%d\t%d\t%s\t%s\t%d\tbig_indel", chrom, ref_pos1+1, del_end_pos+1, ref_slice, alt_seq, mut_size);
         // printf("key is %s\n", kk.s);
         // khint_t k;
         int absent;
@@ -419,10 +425,15 @@ int parse_line(kstring_t *ks, khash_t(str) *h, int debug, khash_t(fasta) *fh, kh
           shift = read_pos2 >= read_pos1 ? read_pos2 - read_pos1 + 1 : 0;
           del_end_pos = ref_pos2 + shift;
       }
-      if (ref_pos1 <= del_end_pos) {
+      if (ref_pos1 < del_end_pos) {
         int mut_size = del_end_pos - ref_pos1 - 1;
+        char ref_slice[mut_size+3];
+        ref_slice[0] = 0;
+        if (fh != NULL){
+          slice(ref_seq, ref_slice, ref_pos1, del_end_pos+1);
+        }
         kstring_t kk = { 0, 0, NULL };
-        ksprintf(&kk, "%s\t%d\t%d\t\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1,  mut_size);
+        ksprintf(&kk, "%s\t%d\t%d\t%s\tinversion\t%d\tinv", chrom, ref_pos1+1, del_end_pos+1, ref_slice, mut_size);
         // khint_t k;
         int absent;
         k = kh_put(str, h, kk.s, &absent);
